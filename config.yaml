@@ -1,0 +1,41 @@
+# Configuration du LLM Wiki
+# Chemins Windows : utiliser des slashes normaux ou des raw strings.
+
+model:
+  path: "models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+
+  # Nombre de couches à offloader sur GPU. -1 = toutes les couches.
+  # Sur une 3070 Ti 8 Go, un 8B Q4_K_M (~4.9 Go) tient entièrement en VRAM.
+  n_gpu_layers: -1
+
+  # Fenêtre de contexte. 8192 est un compromis sûr sur 8 Go VRAM en Q4.
+  # Pousser à 16384 si la VRAM le permet (surveiller avec nvidia-smi).
+  n_ctx: 8192
+
+  # Taille du batch de prompt processing.
+  n_batch: 512
+
+  # Format de chat. None = utilise le template embarqué dans le GGUF (recommandé).
+  # Pour Llama 3.1, le template est inclus dans le fichier — pas besoin de le spécifier.
+  chat_format: null
+
+  # Seed pour la reproductibilité. -1 pour aléatoire.
+  seed: -1
+
+  # Verbose llama.cpp (mettre true pour vérifier que le GPU est utilisé au 1er lancement).
+  verbose: false
+
+inference:
+  # Sampling : plus bas = plus déterministe (mieux pour extraction structurée JSON).
+  temperature: 0.3
+  top_p: 0.9
+  max_tokens: 2048
+
+paths:
+  # Tous les chemins sont relatifs à la racine du projet (dossier contenant ce fichier).
+  # Le wiki est dans le vault Obsidian pour que le graph view fonctionne.
+  raw_dir: "raw"
+  wiki_dir: "data/RAG/wiki"
+  index_file: "data/RAG/wiki/index.md"
+  log_file: "data/RAG/wiki/log.md"
+  schema_file: "SCHEMA.md"

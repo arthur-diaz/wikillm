@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# uv
+.venv
+uv.lock
+
+# Modèle GGUF (lourd, ne pas versionner)
+*.gguf
+models/
+
+# Data du rag (concepts, entities)
+data/RAG/wiki/concepts/*
+data/RAG/wiki/entities/*
+
+
+# Sources brutes — généralement trop volumineuses pour git
+raw/
+
+# Obsidian
+data/RAG/.obsidian/workspace.json
+data/RAG/.obsidian/workspace-mobile.json
+
+# OS
+.DS_Store
+Thumbs.db

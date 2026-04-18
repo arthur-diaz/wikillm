@@ -1,0 +1,22 @@
+[project]
+name = "rag"
+version = "0.1.0"
+description = "LLM Wiki — base de connaissances personnelle maintenue par un LLM local"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1",
+    "python-frontmatter>=1.1",
+    "pyyaml>=6.0",
+    "huggingface-hub>=0.20",
+]
+
+[project.scripts]
+wiki = "scripts.wiki:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scripts"]

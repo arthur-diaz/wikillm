@@ -1,0 +1,14 @@
+# Installation recommandée sur Windows avec CUDA pour RTX 3070 Ti :
+#
+#   set CMAKE_ARGS=-DGGML_CUDA=on
+#   pip install llama-cpp-python --no-cache-dir --force-reinstall --upgrade
+#
+# ou wheel pré-compilée (plus simple) :
+#   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+#
+# Adapte cu124 à ta version de CUDA (nvidia-smi pour vérifier).
+
+llama-cpp-python>=0.3.0
+pyyaml>=6.0
+click>=8.1
+python-frontmatter>=1.1
