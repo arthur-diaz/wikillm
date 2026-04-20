@@ -59,6 +59,32 @@ OVERVIEW_FILE = WIKI_DIR / "overview.md"
 
 
 # ---------------------------------------------------------------------------
+# WikiContext — chemins dynamiques pour le multi-corpus
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WikiContext:
+    wiki_dir: Path
+    raw_dir: Path
+    index_file: Path
+    log_file: Path
+    overview_file: Path
+
+    @classmethod
+    def from_paths(cls, wiki_dir: Path, raw_dir: Path) -> "WikiContext":
+        return cls(
+            wiki_dir=wiki_dir,
+            raw_dir=raw_dir,
+            index_file=wiki_dir / "index.md",
+            log_file=wiki_dir / "log.md",
+            overview_file=wiki_dir / "overview.md",
+        )
+
+
+DEFAULT_CTX: WikiContext = WikiContext.from_paths(WIKI_DIR, RAW_DIR)
+
+
+# ---------------------------------------------------------------------------
 # Budget tokens — estimation légère sans tokenizer externe
 # ---------------------------------------------------------------------------
 
@@ -118,6 +144,12 @@ def _get_llm():
     )
     click.echo("[init] modèle prêt")
     return _LLM_INSTANCE
+
+
+def reset_llm() -> None:
+    """Libère le singleton LLM (pour rechargement avec nouveaux paramètres)."""
+    global _LLM_INSTANCE
+    _LLM_INSTANCE = None
 
 
 def llm_chat(
@@ -223,17 +255,19 @@ def read_schema() -> str:
     return SCHEMA_PATH.read_text(encoding="utf-8")
 
 
-def read_index() -> str:
-    if not INDEX_FILE.exists():
+def read_index(ctx: WikiContext = None) -> str:
+    index_file = (ctx or DEFAULT_CTX).index_file
+    if not index_file.exists():
         return ""
-    return INDEX_FILE.read_text(encoding="utf-8")
+    return index_file.read_text(encoding="utf-8")
 
 
-def append_log(op: str, title: str, body: str) -> None:
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+def append_log(op: str, title: str, body: str, ctx: WikiContext = None) -> None:
+    log_file = (ctx or DEFAULT_CTX).log_file
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     header = f"\n## [{timestamp}] {op} | {title}\n\n"
-    with LOG_FILE.open("a", encoding="utf-8") as f:
+    with log_file.open("a", encoding="utf-8") as f:
         f.write(header + body.rstrip() + "\n")
 
 
@@ -254,16 +288,13 @@ class WikiPage:
         self.path.write_text(frontmatter.dumps(post) + "\n", encoding="utf-8")
 
 
-def list_wiki_pages() -> list[Path]:
+def list_wiki_pages(ctx: WikiContext = None) -> list[Path]:
     """Liste toutes les pages .md du wiki sauf index, log, overview."""
-    if not WIKI_DIR.exists():
+    c = ctx or DEFAULT_CTX
+    if not c.wiki_dir.exists():
         return []
-    excluded = {
-        INDEX_FILE.resolve(),
-        LOG_FILE.resolve(),
-        OVERVIEW_FILE.resolve(),
-    }
-    return [p for p in WIKI_DIR.rglob("*.md") if p.resolve() not in excluded]
+    excluded = {c.index_file.resolve(), c.log_file.resolve(), c.overview_file.resolve()}
+    return [p for p in c.wiki_dir.rglob("*.md") if p.resolve() not in excluded]
 
 
 # ---------------------------------------------------------------------------
@@ -706,13 +737,14 @@ def _enrich_existing_page(
     tracker.append(f"[[{page_slug}]] ({label})")
 
 
-def _update_index_entry(section: str, line: str) -> None:
+def _update_index_entry(section: str, line: str, ctx: WikiContext = None) -> None:
     """Ajoute une ligne sous la section donnée de index.md."""
-    INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not INDEX_FILE.exists():
-        INDEX_FILE.write_text("# Index du wiki\n\n", encoding="utf-8")
+    index_file = (ctx or DEFAULT_CTX).index_file
+    index_file.parent.mkdir(parents=True, exist_ok=True)
+    if not index_file.exists():
+        index_file.write_text("# Index du wiki\n\n", encoding="utf-8")
 
-    text = INDEX_FILE.read_text(encoding="utf-8")
+    text = index_file.read_text(encoding="utf-8")
     section_header = f"## {section}"
 
     # Retirer le placeholder "_Aucun(e)..."
@@ -748,7 +780,7 @@ def _update_index_entry(section: str, line: str) -> None:
 
     # Dédoublonne lignes identiques consécutives
     text = re.sub(r"(?m)^(- \[\[[^\]]+\]\].*)\n\1\n", r"\1\n", text)
-    INDEX_FILE.write_text(text, encoding="utf-8")
+    index_file.write_text(text, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

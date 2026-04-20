@@ -15,7 +15,7 @@ uv.lock
 models/
 
 # Data du rag (concepts, entities)
-data/RAG/wiki/concepts/*
+corpora/*
 data/RAG/wiki/entities/*
 
 
@@ -25,6 +25,12 @@ raw/
 # Obsidian
 data/RAG/.obsidian/workspace.json
 data/RAG/.obsidian/workspace-mobile.json
+
+# Frontend
+frontend/node_modules/
+
+# Frontend build (régénéré par `npm run build`)
+app/static/
 
 # OS
 .DS_Store

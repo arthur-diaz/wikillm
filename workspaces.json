@@ -1,0 +1,26 @@
+{
+  "active": "ia",
+  "corpora": {
+    "default": {
+      "name": "Default",
+      "wiki_dir": "data/RAG/wiki",
+      "raw_dir": "raw"
+    },
+    "ia": {
+      "name": "IA",
+      "path": "corpora/ia"
+    },
+    "linux": {
+      "name": "Linux",
+      "path": "corpora/linux"
+    },
+    "test": {
+      "name": "test",
+      "path": "corpora/test"
+    },
+    "test-2": {
+      "name": "test",
+      "path": "corpora/test-2"
+    }
+  }
+}
