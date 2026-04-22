@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageSquare, BookOpen, Upload, Settings, PanelLeft, Network, ChevronDown, Plus } from "lucide-react";
+import { MessageSquare, BookOpen, Upload, Settings, PanelLeft, Network, ChevronDown } from "lucide-react";
 import type { Panel } from "../App";
 import type { Corpus } from "../CorpusContext";
 
@@ -69,76 +69,67 @@ export default function Sidebar({ active, onChange, activeCorpus, corpusList, on
       className="flex flex-col border-r border-[#212226] overflow-hidden shrink-0 transition-[width] duration-200"
       style={{ background: "#111113", width: collapsed ? 60 : 232 }}
     >
-      {/* Top — brand + collapse */}
-      <div className={`h-[52px] shrink-0 flex items-center ${collapsed ? "justify-center" : "justify-between px-3"}`}>
-        <div className="w-7 h-7 grid place-items-center rounded-md shrink-0" style={{ background: "#8b5cf6" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
-          </svg>
-        </div>
-        {!collapsed && (
+      {/* Top — corpus selector + collapse */}
+      <div className={`h-[52px] shrink-0 flex items-center px-3 gap-2 ${collapsed ? "justify-center" : ""}`}>
+        {collapsed ? (
           <button
-            onClick={() => setCollapsed(true)}
-            title="Réduire (⌘B)"
+            onClick={() => setCollapsed(false)}
+            title="Étendre (⌘B)"
             className="w-7 h-7 grid place-items-center rounded-md text-[#6b6c72] hover:text-[#ececed] hover:bg-[#1d1e22] transition-colors"
           >
             <PanelLeft size={15} strokeWidth={1.6} />
           </button>
+        ) : (
+          <>
+            <div className="flex-1 min-w-0 relative">
+              <button
+                onClick={() => setCorpusOpen(v => !v)}
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-[#212226] hover:border-[#2a2b31] hover:bg-[#1d1e22] transition-colors"
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#34d399" }} />
+                  <span className="text-[12.5px] text-[#ececed] truncate">{activeCorpusName}</span>
+                </span>
+                <ChevronDown size={12} className={`text-[#6b6c72] transition-transform ${corpusOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {corpusOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setCorpusOpen(false)} />
+                  <div
+                    className="absolute left-0 right-0 top-full mt-1 z-20 rounded-md border border-[#2a2b31] overflow-hidden"
+                    style={{ background: "#17181b", boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}
+                  >
+                    {corpusList.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { onSwitchCorpus(c.id); setCorpusOpen(false); }}
+                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] transition-colors ${
+                          c.id === activeCorpus ? "text-[#ececed] bg-[#1d1e22]" : "text-[#a1a1a6] hover:text-[#ececed] hover:bg-[#1d1e22]"
+                        }`}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ background: c.id === activeCorpus ? "#34d399" : "#3a3b42" }}
+                        />
+                        <span className="truncate">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={() => setCollapsed(true)}
+              title="Réduire (⌘B)"
+              className="w-7 h-7 shrink-0 grid place-items-center rounded-md text-[#6b6c72] hover:text-[#ececed] hover:bg-[#1d1e22] transition-colors"
+            >
+              <PanelLeft size={15} strokeWidth={1.6} />
+            </button>
+          </>
         )}
       </div>
-
-      {/* Expand button when collapsed */}
-      {collapsed && (
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Étendre (⌘B)"
-          className="mx-auto mb-1 w-7 h-7 grid place-items-center rounded-md text-[#6b6c72] hover:text-[#ececed] hover:bg-[#1d1e22] transition-colors"
-        >
-          <PanelLeft size={15} strokeWidth={1.6} />
-        </button>
-      )}
-
-      {/* Corpus selector (expanded only) */}
-      {!collapsed && (
-        <div className="px-3 mb-2 relative">
-          <button
-            onClick={() => setCorpusOpen(v => !v)}
-            className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-[#212226] hover:border-[#2a2b31] hover:bg-[#1d1e22] transition-colors"
-          >
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#34d399" }} />
-              <span className="text-[12.5px] text-[#ececed] truncate">{activeCorpusName}</span>
-            </span>
-            <ChevronDown size={12} className={`text-[#6b6c72] transition-transform ${corpusOpen ? "rotate-180" : ""}`} />
-          </button>
-
-          {corpusOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setCorpusOpen(false)} />
-              <div
-                className="absolute left-3 right-3 top-full mt-1 z-20 rounded-md border border-[#2a2b31] overflow-hidden"
-                style={{ background: "#17181b", boxShadow: "0 10px 30px rgba(0,0,0,.5)" }}
-              >
-                {corpusList.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => { onSwitchCorpus(c.id); setCorpusOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] transition-colors ${
-                      c.id === activeCorpus ? "text-[#ececed] bg-[#1d1e22]" : "text-[#a1a1a6] hover:text-[#ececed] hover:bg-[#1d1e22]"
-                    }`}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: c.id === activeCorpus ? "#34d399" : "#3a3b42" }}
-                    />
-                    <span className="truncate">{c.name}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {/* Nav */}
       <nav className="flex-1 px-2 overflow-y-auto ui-scroll">
@@ -156,15 +147,6 @@ export default function Sidebar({ active, onChange, activeCorpus, corpusList, on
       <div className="px-2 pb-3 shrink-0 border-t border-[#212226] pt-2 mt-2">
         <div className="flex flex-col gap-0.5">
           {navItem("settings", Settings, "Réglages")}
-          {!collapsed && (
-            <button
-              className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-[#a1a1a6] hover:text-[#ececed] hover:bg-[#1d1e22] transition-colors"
-              title="Nouveau chat"
-            >
-              <Plus size={16} strokeWidth={1.7} className="shrink-0" />
-              <span className="text-[13px] font-medium">Nouveau chat</span>
-            </button>
-          )}
         </div>
       </div>
     </aside>
