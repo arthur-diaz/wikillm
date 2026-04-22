@@ -76,7 +76,7 @@ Ouvrir [http://localhost:5173](http://localhost:5173) (dev) ou [http://localhost
 ### CLI uniquement
 
 ```bash
-# Mode interactif (charge le modèle une seule fois — recommandé)
+ # Mode interactif (charge le modèle une seule fois — recommandé)
 uv run wiki shell
 
 # Commandes directes

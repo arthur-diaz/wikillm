@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Lightbulb, Bookmark } from "lucide-react";
+import { ArrowUp, Lightbulb, Bookmark, Plus, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { ACCENT } from "./ui/design";
 
 type Msg = { id: number; role: "user" | "assistant" | "suggest"; content: string; loading: boolean };
 
 let _nextId = 0;
+
+const SUGGESTIONS = [
+  "Résume les pages ajoutées cette semaine",
+  "Liens entre « mémoire » et « attention »",
+  "Cherche des contradictions",
+];
 
 export default function ChatPanel() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -23,7 +30,6 @@ export default function ChatPanel() {
     setMessages(prev => [...prev, { ...m, id }]);
     return id;
   };
-
   const patch = (id: number, diff: Partial<Msg>) =>
     setMessages(prev => prev.map(m => m.id === id ? { ...m, ...diff } : m));
 
@@ -34,20 +40,14 @@ export default function ChatPanel() {
     const es = new EventSource(url);
     esRef.current = es;
     let buf = "";
-    es.addEventListener("token", e => {
-      buf += (e as MessageEvent).data;
-      patch(msgId, { content: buf });
-    });
+    es.addEventListener("token", e => { buf += (e as MessageEvent).data; patch(msgId, { content: buf }); });
     es.addEventListener("error", e => {
       const d = (e as MessageEvent).data;
       if (d) patch(msgId, { content: d, loading: false });
       else patch(msgId, { loading: false });
       setBusy(false); es.close();
     });
-    es.addEventListener("done", () => {
-      patch(msgId, { loading: false });
-      setBusy(false); es.close();
-    });
+    es.addEventListener("done", () => { patch(msgId, { loading: false }); setBusy(false); es.close(); });
     es.onerror = () => { patch(msgId, { loading: false }); setBusy(false); es.close(); };
   };
 
@@ -55,104 +55,166 @@ export default function ChatPanel() {
     const q = input.trim();
     if (!q || busy) return;
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     push({ role: "user", content: q, loading: false });
     streamSSE(`/api/query?question=${encodeURIComponent(q)}&file_back=${fileBack}`, "assistant");
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
-  const analyse = () => {
-    if (busy) return;
-    streamSSE("/api/suggest", "suggest");
-  };
+  const analyse = () => { if (busy) return; streamSSE("/api/suggest", "suggest"); };
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-            <MessageIcon />
-            <p className="text-sm text-gray-600">Pose une question sur le wiki, ou analyse son contenu.</p>
-          </div>
-        )}
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {msg.role === "user" ? (
-              <div className="max-w-xl bg-blue-600 text-white text-sm rounded-2xl rounded-br-sm px-4 py-2.5">
-                {msg.content}
-              </div>
-            ) : (
-              <div className={`w-full max-w-3xl rounded-xl px-4 py-3 border ${
-                msg.role === "suggest"
-                  ? "border-yellow-800/50 bg-yellow-950/10"
-                  : "border-gray-800"
-              }`} style={{ background: msg.role === "suggest" ? undefined : "#161b22" }}>
-                {msg.role === "suggest" && (
-                  <p className="flex items-center gap-1.5 text-xs text-yellow-500/80 mb-2">
-                    <Lightbulb size={11} /> Analyse du wiki
-                  </p>
-                )}
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown>{msg.content || (msg.loading ? "\u00a0" : "")}</ReactMarkdown>
-                </div>
-                {msg.loading && <span className="inline-block w-1.5 h-3.5 bg-current opacity-60 animate-pulse ml-0.5 align-middle" />}
-              </div>
-            )}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+  const isEmpty = messages.length === 0;
 
-      {/* Input bar */}
-      <div className="border-t border-gray-800 p-3" style={{ background: "#161b22" }}>
-        <div className="flex items-end gap-2">
-          <button
-            onClick={analyse}
-            disabled={busy}
-            title="Analyser le wiki"
-            className="flex items-center gap-1.5 text-xs text-yellow-400 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 px-3 py-2 rounded-lg flex-shrink-0 whitespace-nowrap"
-          >
-            <Lightbulb size={13} />
-            <span className="hidden sm:inline">Analyser</span>
-          </button>
-
+  /* Composer (reused in both states) */
+  const Composer = (
+    <div className="w-full max-w-[720px] mx-auto">
+      <div className="rounded-2xl border border-[#212226] bg-[#17181b] focus-within:border-[#2a2b31] transition-colors">
+        <div className="px-4 pt-3.5">
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+            onChange={e => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
+            }}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Pose une question… (Entrée pour envoyer)"
+            placeholder="Pose une question sur ton wiki…"
             disabled={busy}
             rows={1}
-            className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-40"
-            style={{ minHeight: "38px", maxHeight: "120px", overflowY: "auto" }}
+            className="w-full bg-transparent outline-none text-[14.5px] leading-relaxed text-[#ececed] placeholder:text-[#6b6c72] resize-none disabled:opacity-50 ui-scroll"
+            style={{ minHeight: 24, maxHeight: 200 }}
           />
-
-          <label className="flex items-center gap-1 text-gray-600 hover:text-gray-400 cursor-pointer flex-shrink-0 py-2" title="Sauvegarder la réponse en page wiki">
-            <input type="checkbox" checked={fileBack} onChange={e => setFileBack(e.target.checked)} className="accent-blue-500 w-3 h-3" />
-            <Bookmark size={13} className={fileBack ? "text-blue-400" : ""} />
-          </label>
-
-          <button
-            onClick={send}
-            disabled={busy || !input.trim()}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white p-2 rounded-lg flex-shrink-0"
-          >
-            <Send size={15} />
-          </button>
         </div>
-        {fileBack && (
-          <p className="text-xs text-blue-400/70 mt-1.5 ml-1">Les réponses seront sauvegardées en page wiki.</p>
-        )}
+        <div className="flex items-center justify-between px-2.5 pb-2.5 pt-2">
+          <div className="flex items-center gap-1">
+            <button
+              title="Ajouter"
+              className="w-7 h-7 grid place-items-center rounded-md text-[#6b6c72] hover:text-[#ececed] hover:bg-[#1d1e22] transition-colors"
+            >
+              <Plus size={14} strokeWidth={1.8} />
+            </button>
+            <button
+              onClick={analyse}
+              disabled={busy}
+              title="Analyser le wiki"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[#a1a1a6] hover:text-[#ececed] hover:bg-[#1d1e22] text-[12px] font-medium transition-colors disabled:opacity-40"
+            >
+              <Lightbulb size={13} strokeWidth={1.8} />
+              Analyser
+            </button>
+            <button
+              onClick={() => setFileBack(v => !v)}
+              title="Sauvegarder la réponse comme page"
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                fileBack ? "text-[#a78bfa] bg-[#1d1e22]" : "text-[#a1a1a6] hover:text-[#ececed] hover:bg-[#1d1e22]"
+              }`}
+            >
+              <Bookmark size={13} strokeWidth={1.8} />
+              Sauvegarder
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="inline-flex items-center gap-1 text-[11.5px] text-[#6b6c72] hover:text-[#a1a1a6] px-1.5 transition-colors">
+              Local <ChevronDown size={10} strokeWidth={2} />
+            </button>
+            <button
+              onClick={send}
+              disabled={busy || !input.trim()}
+              className="w-8 h-8 grid place-items-center rounded-lg text-white transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: ACCENT }}
+            >
+              <ArrowUp size={14} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
       </div>
+
+      {isEmpty && (
+        <>
+          <div className="flex flex-wrap gap-1.5 mt-4 justify-center">
+            {SUGGESTIONS.map(s => (
+              <button
+                key={s}
+                onClick={() => { setInput(s); textareaRef.current?.focus(); }}
+                className="px-2.5 py-1 rounded-full border border-[#212226] text-[12px] text-[#a1a1a6] hover:text-[#ececed] hover:border-[#2a2b31] hover:bg-[#1d1e22] transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="mt-8 flex items-center justify-center gap-4 text-[11px] text-[#6b6c72]">
+            <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 rounded border border-[#2a2b31] bg-[#17181b] font-mono text-[10px] text-[#a1a1a6]">↵</kbd> envoyer</span>
+            <span className="flex items-center gap-1.5"><kbd className="px-1.5 py-0.5 rounded border border-[#2a2b31] bg-[#17181b] font-mono text-[10px] text-[#a1a1a6]">⇧ ↵</kbd> nouvelle ligne</span>
+          </div>
+        </>
+      )}
     </div>
   );
-}
 
-function MessageIcon() {
   return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-800">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
+    <div className="flex flex-col h-full" style={{ background: "#0a0a0b" }}>
+      {isEmpty ? (
+        <div className="flex-1 flex flex-col items-center justify-center px-4">
+          <div className="mb-8">
+            <div
+              className="w-14 h-14 rounded-2xl grid place-items-center"
+              style={{ background: "linear-gradient(135deg, rgba(139,92,246,.25), rgba(139,92,246,.05))", border: "1px solid rgba(139,92,246,.35)" }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M4 6h4v4H4zM10 6h4v4h-4zM16 6h4v4h-4zM4 14h4v4H4zM16 14h4v4h-4z" fill="#8b5cf6" />
+                <path d="M10 14h4v4h-4z" fill="#a78bfa" />
+              </svg>
+            </div>
+          </div>
+          {Composer}
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto ui-scroll">
+            <div className="max-w-[760px] mx-auto px-5 py-6 space-y-5">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "user" ? (
+                    <div
+                      className="max-w-xl text-white text-[14px] rounded-2xl rounded-br-sm px-4 py-2.5 leading-relaxed"
+                      style={{ background: ACCENT }}
+                    >
+                      {msg.content}
+                    </div>
+                  ) : (
+                    <div
+                      className="w-full text-[14px] leading-relaxed"
+                      style={{
+                        background: msg.role === "suggest" ? "rgba(234,179,8,0.04)" : "transparent",
+                        border: msg.role === "suggest" ? "1px solid rgba(234,179,8,0.3)" : "none",
+                        borderRadius: msg.role === "suggest" ? 12 : 0,
+                        padding: msg.role === "suggest" ? "12px 16px" : 0,
+                      }}
+                    >
+                      {msg.role === "suggest" && (
+                        <p className="flex items-center gap-1.5 text-[11px] text-yellow-500/80 mb-2 font-medium uppercase tracking-wide">
+                          <Lightbulb size={11} /> Analyse du wiki
+                        </p>
+                      )}
+                      <div className="prose prose-invert prose-sm max-w-none">
+                        <ReactMarkdown>{msg.content || (msg.loading ? "\u00a0" : "")}</ReactMarkdown>
+                      </div>
+                      {msg.loading && (
+                        <span className="inline-block w-1.5 h-3.5 bg-current opacity-60 animate-pulse ml-0.5 align-middle" />
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+          <div className="shrink-0 px-4 pb-4 pt-2" style={{ background: "linear-gradient(to top, #0a0a0b 70%, rgba(10,10,11,0))" }}>
+            {Composer}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

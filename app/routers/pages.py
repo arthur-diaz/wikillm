@@ -1,11 +1,12 @@
 """Wiki browser — liste et lecture des pages + graphe."""
 from __future__ import annotations
 
-import json
+import re
+from datetime import date
 
 import frontmatter
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 import wiki as w
 from app import state
@@ -48,6 +49,109 @@ async def get_page(slug: str):
     post = frontmatter.load(slug_map[slug])
     return {"slug": slug, "meta": dict(post.metadata), "content": post.content}
 
+
+# ---------------------------------------------------------------------------
+# PATCH — mise à jour du contenu markdown
+# ---------------------------------------------------------------------------
+
+class PageUpdate(BaseModel):
+    content: str
+
+
+@router.patch("/pages/{slug}")
+async def update_page(slug: str, body: PageUpdate):
+    ctx = state.get_ctx()
+    slug_map = {p.stem: p for p in w.list_wiki_pages(ctx)}
+    if slug not in slug_map:
+        raise HTTPException(404, f"[[{slug}]] introuvable")
+    post = frontmatter.load(slug_map[slug])
+    meta = dict(post.metadata)
+    meta["last_updated"] = date.today().isoformat()
+    page = w.WikiPage(path=slug_map[slug], meta=meta, content=body.content)
+    page.save()
+    return {"ok": True, "last_updated": meta["last_updated"]}
+
+
+# ---------------------------------------------------------------------------
+# DELETE — suppression d'une page
+# ---------------------------------------------------------------------------
+
+@router.delete("/pages/{slug}")
+async def delete_page(slug: str):
+    ctx = state.get_ctx()
+    slug_map = {p.stem: p for p in w.list_wiki_pages(ctx)}
+    if slug not in slug_map:
+        raise HTTPException(404, f"[[{slug}]] introuvable")
+    path = slug_map[slug]
+    path.unlink()
+    _remove_from_index(slug, ctx)
+    w.append_log("DELETE", slug, f"Page [[{slug}]] supprimée manuellement.", ctx)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# POST — création manuelle d'une page
+# ---------------------------------------------------------------------------
+
+class PageCreate(BaseModel):
+    type: str
+    name: str
+    tags: list[str] = []
+    slug: str | None = None
+
+
+@router.post("/pages")
+async def create_page(body: PageCreate):
+    ctx = state.get_ctx()
+    if body.type not in ("source", "entity", "concept"):
+        raise HTTPException(400, "type doit être source, entity ou concept")
+    slug = body.slug or re.sub(r"[^a-z0-9]+", "-", body.name.lower()).strip("-")
+    if not slug:
+        raise HTTPException(400, "nom invalide")
+    slug_map = {p.stem: p for p in w.list_wiki_pages(ctx)}
+    if slug in slug_map:
+        raise HTTPException(409, f"[[{slug}]] existe déjà")
+    subdir = {"source": "sources", "entity": "entities", "concept": "concepts"}[body.type]
+    path = ctx.wiki_dir / subdir / f"{slug}.md"
+    today = date.today().isoformat()
+    meta = {
+        "type": body.type,
+        "name": body.name,
+        "slug": slug,
+        "aliases": [],
+        "sources": [],
+        "tags": body.tags,
+        "last_updated": today,
+    }
+    page = w.WikiPage(path=path, meta=meta, content=f"# {body.name}\n\n")
+    page.save()
+    section = {"source": "Sources", "entity": "Entités", "concept": "Concepts"}[body.type]
+    w._update_index_entry(section, f"- [[{slug}]] — {body.name}", ctx)
+    w.append_log("CREATE", slug, f"Page [[{slug}]] créée manuellement.", ctx)
+    return {"slug": slug, "meta": meta, "content": page.content}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _remove_from_index(slug: str, ctx: w.WikiContext) -> None:
+    index_file = ctx.index_file
+    if not index_file.exists():
+        return
+    text = index_file.read_text(encoding="utf-8")
+    text = re.sub(
+        rf"^- \[\[{re.escape(slug)}\]\][^\n]*\n?",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    index_file.write_text(text, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Graphe
+# ---------------------------------------------------------------------------
 
 @router.get("/graph-data")
 async def graph_data():

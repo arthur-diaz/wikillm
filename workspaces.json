@@ -9,18 +9,6 @@
     "ia": {
       "name": "IA",
       "path": "corpora/ia"
-    },
-    "linux": {
-      "name": "Linux",
-      "path": "corpora/linux"
-    },
-    "test": {
-      "name": "test",
-      "path": "corpora/test"
-    },
-    "test-2": {
-      "name": "test",
-      "path": "corpora/test-2"
     }
   }
 }
