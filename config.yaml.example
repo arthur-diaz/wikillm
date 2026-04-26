@@ -1,0 +1,31 @@
+inference:
+  max_tokens: 2048
+  temperature: 0.3
+  top_p: 0.9
+
+llm_provider:
+  # mode: "local" pour un modèle GGUF, "api" pour un fournisseur cloud
+  mode: local
+  api_provider: openai      # openai | anthropic | mistral (si mode: api)
+  api_model: gpt-4o         # modèle API à utiliser
+  api_keys:
+    openai: ""              # Optionnel : ta clé OpenAI
+    anthropic: ""           # Optionnel : ta clé Anthropic
+    mistral: ""             # Optionnel : ta clé Mistral
+
+model:
+  # Chemin vers le fichier GGUF (relatif à la racine du projet)
+  path: "models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+  n_gpu_layers: -1          # -1 = toutes les couches sur GPU, 0 = CPU seul
+  n_ctx: 16384              # fenêtre de contexte en tokens
+  n_batch: 512
+  chat_format: null         # null = auto-détection depuis le GGUF
+  seed: -1
+  verbose: false
+
+paths:
+  raw_dir: raw
+  wiki_dir: data/RAG/wiki
+  index_file: data/RAG/wiki/index.md
+  log_file: data/RAG/wiki/log.md
+  schema_file: SCHEMA.md

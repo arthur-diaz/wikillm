@@ -1,0 +1,9 @@
+{
+  "active": "exemple",
+  "corpora": {
+    "exemple": {
+      "name": "Mon premier corpus",
+      "path": "corpora/exemple"
+    }
+  }
+}

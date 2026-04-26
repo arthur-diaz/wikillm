@@ -1,43 +1,65 @@
-# LLM Wiki
+# WikiLLM
 
-Base de connaissances personnelle maintenue par un LLM local (Meta-Llama-3.1-8B-Instruct Q4_K_M via llama.cpp).
+WikiLLM est une base de connaissances personnelle maintenue par un LLM. Il ingère des sources brutes (articles, notes, transcripts), en extrait entités et concepts, et maintient des pages Markdown interconnectées dans un vault Obsidian. Une interface web React pilote l'ensemble sans CLI.
 
-Le wiki est un vault Obsidian versionné : le LLM ingère des sources brutes, extrait entités et concepts, et maintient des pages markdown interconnectées. Une interface web permet de tout piloter sans CLI.
+> **Backends supportés** : modèle GGUF local (llama.cpp), OpenAI, Anthropic, Mistral.
+
+---
+
+## Aperçu
+
+![Interface WikiLLM](docs/screenshot.png)
+
+*(screenshot à venir)*
+
+---
 
 ## Installation
 
-### 1. Dépendances Python
+### Prérequis
+
+- Python 3.12+
+- [uv](https://github.com/astral-sh/uv) (`pip install uv`)
+- Node.js 18+ (pour le frontend)
+- GPU NVIDIA recommandé pour les modèles locaux
+
+### 1. Cloner et installer les dépendances Python
 
 ```bash
+git clone https://github.com/<ton-user>/wikillm.git
+cd wikillm
 uv sync
 ```
 
-### 2. llama-cpp-python avec CUDA
+### 2. Configurer
 
-**Ne pas utiliser `uv add`** — cela installe la version CPU. Utiliser la wheel pré-compilée :
+```bash
+cp config.yaml.example config.yaml
+cp workspaces.json.example workspaces.json
+```
+
+Édite `config.yaml` : choisis le mode (`local` ou `api`), renseigne le chemin GGUF ou les clés API.
+
+### 3. Modèle local (optionnel, si `mode: local`)
+
+Télécharger un modèle GGUF dans `models/` :
+
+```bash
+uv run python download_model.py
+```
+
+Ou manuellement depuis [HuggingFace](https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF) et placer le fichier `.gguf` dans `models/`.
+
+#### llama-cpp-python avec CUDA
 
 ```bash
 uv pip install llama-cpp-python==0.3.4 --force-reinstall --no-cache-dir \
   --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
 ```
 
-> Vérifie ta version CUDA avec `nvidia-smi`. Adapte `cu121` si besoin (`cu122`, `cu123`, `cu124`).
+> Adapte `cu121` à ta version CUDA (`nvidia-smi` pour vérifier). Relancer cette commande après chaque `uv add`.
 
-> **Important** : après chaque `uv add <paquet>`, relancer cette commande — `uv sync` réinstalle la version CPU.
-
-### 3. Modèle GGUF
-
-Télécharger et placer dans `models/` :
-
-```bash
-uv run huggingface-cli download bartowski/Meta-Llama-3.1-8B-Instruct-GGUF \
-  Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
-  --local-dir models/
-```
-
-Le chemin dans `config.yaml` est déjà configuré pour ce fichier.
-
-### 4. Frontend (optionnel, pour l'interface web)
+### 4. Frontend
 
 ```bash
 cd frontend
@@ -47,39 +69,24 @@ npm run build
 
 Le build est copié dans `app/static/` et servi automatiquement par FastAPI.
 
-En développement, lancer le serveur Vite séparément (voir ci-dessous).
+---
 
-### 5. Vérifier l'utilisation GPU
-
-Activer `verbose: true` dans `config.yaml` pour le premier lancement. Chercher :
-
-```
-llm_load_tensors: offloaded 33/33 layers to GPU
-```
-
-Si `0/33` → la wheel CUDA n'est pas installée, reprendre l'étape 2.
-
-## Lancer l'application
-
-### Interface web (recommandé)
+## Lancement
 
 ```bash
 # Backend FastAPI (port 8000)
 uvicorn app.main:app --reload --port 8000
 
-# Frontend dev avec hot-reload (port 5173) — optionnel si le build existe
+# Frontend dev avec hot-reload (port 5173) — facultatif si le build existe
 cd frontend && npm run dev
 ```
 
 Ouvrir [http://localhost:5173](http://localhost:5173) (dev) ou [http://localhost:8000](http://localhost:8000) (prod).
 
-### CLI uniquement
+### CLI
 
 ```bash
- # Mode interactif (charge le modèle une seule fois — recommandé)
-uv run wiki shell
-
-# Commandes directes
+uv run wiki shell          # mode interactif (charge le modèle une seule fois)
 uv run wiki ingest raw/mon-article.md
 uv run wiki query "ma question"
 uv run wiki search "termes"
@@ -88,78 +95,85 @@ uv run wiki stats
 uv run wiki suggest
 ```
 
-## Interface web — fonctionnalités
+---
+
+## Interface web
 
 | Panneau | Description |
 |---|---|
-| **Query** | Pose une question, le LLM répond en s'appuyant sur les pages du wiki |
-| **Ingest** | Upload d'un fichier → extraction LLM → création des pages wiki |
-| **Search** | Recherche full-text BM25 dans toutes les pages |
-| **Wiki** | Navigateur de pages avec lecture markdown |
-| **Graph** | Graphe de liens entre pages (force-directed SVG) |
-| **Lint** | Détecte liens cassés, frontmatter invalide, pages orphelines |
+| **Query** | Question → réponse LLM ancrée dans le wiki |
+| **Ingest** | Upload fichier → extraction LLM → pages wiki |
+| **Search** | Recherche full-text BM25 |
+| **Wiki** | Navigateur de pages Markdown |
+| **Graph** | Graphe de liens force-directed |
+| **Lint** | Liens cassés, frontmatter invalide, pages orphelines |
 | **Stats** | Compteurs, budget tokens, tags fréquents |
-| **Suggest** | Le LLM analyse le wiki et propose des pistes d'exploration |
-| **Corpus** | Gère plusieurs bases de connaissances indépendantes |
-| **Paramètres** | Sélection du modèle GGUF, sliders d'inférence (n_ctx, temperature…) |
+| **Suggest** | Le LLM propose des pistes d'exploration |
+| **Corpus** | Plusieurs bases de connaissances indépendantes |
+| **Paramètres** | Modèle GGUF, sliders d'inférence, clés API |
+
+---
+
+## Architecture
+
+WikiLLM organise les données en trois couches :
+
+```
+raw/              ← sources brutes (articles, notes, PDF texte…)
+wiki/
+  sources/        ← page de synthèse par source ingérée
+  entities/       ← personnes, organisations, produits…
+  concepts/       ← idées, théories, techniques…
+  index.md        ← sommaire navigable maintenu par le LLM
+  log.md          ← journal d'opérations
+SCHEMA.md         ← conventions lues par le LLM à chaque appel
+```
+
+Chaque page Markdown contient un frontmatter YAML (type, slug, tags, liens) et un corps en prose. Le LLM enrichit les pages existantes plutôt que d'en créer des doublons.
+
+---
+
+## Backends LLM supportés
+
+| Backend | Config `mode` | Prérequis |
+|---|---|---|
+| GGUF local (llama.cpp) | `local` | fichier `.gguf` dans `models/` |
+| OpenAI | `api` + `api_provider: openai` | clé `OPENAI_API_KEY` dans `config.yaml` |
+| Anthropic | `api` + `api_provider: anthropic` | clé `ANTHROPIC_API_KEY` |
+| Mistral | `api` + `api_provider: mistral` | clé `MISTRAL_API_KEY` |
+
+---
 
 ## Multi-corpus
 
-Chaque corpus est un wiki indépendant avec ses propres dossiers `raw/` et `wiki/`. Le panneau **Corpus** permet de créer et switcher entre eux.
-
-À la création, le système génère automatiquement :
-
-```
-corpora/<slug>/
-  raw/                  ← sources brutes à ingérer
-  wiki/
-    .obsidian/          ← vault Obsidian prêt à l'emploi
-    sources/
-    entities/
-    concepts/
-    index.md
-    log.md
-```
+Chaque corpus est un wiki indépendant avec ses propres dossiers `raw/` et `wiki/`. Le panneau **Corpus** permet de créer et switcher entre eux. Les corpus sont enregistrés dans `workspaces.json` (non versionné).
 
 Pour ouvrir un corpus dans Obsidian : **"Ouvrir un autre coffre"** → `corpora/<slug>/wiki/`.
 
-Les corpus sont enregistrés dans `workspaces.json`.
+---
 
 ## Structure du projet
 
 ```
-.
-├── scripts/wiki.py       # CLI + logique métier (ingest, query, lint…)
-├── app/
-│   ├── main.py           # Serveur FastAPI
-│   ├── state.py          # Corpus actif, statut modèle
-│   ├── wiki_bridge.py    # Bridge async ↔ sync pour le LLM
-│   └── routers/          # Endpoints API
-├── frontend/             # Interface React/Vite/Tailwind
-├── config.yaml           # Modèle et paramètres d'inférence
-├── workspaces.json       # Registre des corpus
-├── SCHEMA.md             # Conventions du wiki (lu par le LLM)
-├── models/               # Fichiers GGUF (non versionnés)
-├── raw/                  # Sources brutes corpus par défaut (non versionné)
-└── data/RAG/             # Vault Obsidian corpus par défaut
-    └── wiki/             # Pages maintenues par le LLM
+wikillm/
+├── app/                    # Backend FastAPI
+│   ├── main.py
+│   ├── state.py
+│   ├── wiki_bridge.py
+│   └── routers/
+├── frontend/               # Interface React/Vite/Tailwind
+├── scripts/
+│   └── wiki.py             # CLI + logique métier
+├── SCHEMA.md               # Conventions du wiki (lues par le LLM)
+├── config.yaml.example     # Template de configuration → copier en config.yaml
+├── workspaces.json.example # Template corpus → copier en workspaces.json
+├── download_model.py       # Helper pour télécharger un GGUF depuis HuggingFace
+├── requirements.txt
+└── pyproject.toml
 ```
 
-## Configuration (`config.yaml`)
+---
 
-```yaml
-model:
-  path: "models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
-  n_gpu_layers: -1    # -1 = toutes les couches sur GPU
-  n_ctx: 8192         # fenêtre de contexte
-  n_batch: 512
-  chat_format: null   # template embarqué dans le GGUF
-  verbose: false
+## Licence
 
-inference:
-  temperature: 0.3
-  top_p: 0.9
-  max_tokens: 2048
-```
-
-Voir `SCHEMA.md` pour les conventions de nommage et de structure des pages wiki.
+MIT

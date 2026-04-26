@@ -1,37 +1,68 @@
 # Python
 __pycache__/
-*.py[oc]
-build/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
 dist/
-wheels/
-*.egg-info
+build/
+.venv/
+venv/
+env/
 
 # uv
-.venv
 uv.lock
 
-# Modèle GGUF (lourd, ne pas versionner)
+# Modèles LLM (volumineux, télécharger via download_model.py)
 *.gguf
+*.bin
+*.safetensors
 models/
 
-# Data du rag (concepts, entities)
-corpora/*
-data/RAG/wiki/entities/*
-
-
-# Sources brutes — généralement trop volumineuses pour git
+# Données personnelles et corpus
+corpora/
+data/
 raw/
 
-# Obsidian
-data/RAG/.obsidian/workspace.json
-data/RAG/.obsidian/workspace-mobile.json
+# Clés et secrets
+.env
+.env.local
+secrets.yaml
+config.local.yaml
 
-# Frontend
-frontend/node_modules/
+# Configuration utilisateur (copier *.example → enlever .example)
+config.yaml
+workspaces.json
 
 # Frontend build (régénéré par `npm run build`)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
 app/static/
+
+# Exports générés
+wiki-graph.html
+*.marp.md
+exports/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Obsidian (données utilisateur)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
