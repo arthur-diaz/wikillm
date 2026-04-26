@@ -27,6 +27,13 @@ _ANSWER_SYSTEM = (
 )
 _ANSWER_USER = "Question : {question}\n\nPages :\n\n{pages}\n\nRéponds en markdown concis avec des liens [[page]]."
 
+_SUGGEST_SYSTEM = (
+    "Tu es un expert en gestion de connaissances. "
+    "Une question a été posée mais le wiki ne contient aucune information pertinente. "
+    "Propose 2-3 types de sources ou documents concrets à ingérer pour pouvoir répondre. "
+    "Sois bref et pratique. Réponds en français avec des tirets."
+)
+
 
 @router.get("/query")
 async def query(question: str, file_back: bool = False):
@@ -47,7 +54,20 @@ async def query(question: str, file_back: bool = False):
 
         selected_slugs = selection.get("pages", [])
         if not selected_slugs:
-            yield {"event": "done", "data": json.dumps({"pages": []})}
+            yield {"event": "status", "data": "Aucune page pertinente — suggestions de sources…"}
+            async with _llm_lock:
+                suggestions = await run_blocking(
+                    w.llm_chat,
+                    _SUGGEST_SYSTEM,
+                    f"Question : {question}\n\nPropose 2-3 types de sources à ingérer.",
+                    max_tokens=300,
+                )
+            w.append_log(
+                "query", question[:80],
+                "- Pages : (aucune)\n- Suggestions de sources : oui\n",
+                ctx,
+            )
+            yield {"event": "done", "data": json.dumps({"pages": [], "suggestions": suggestions})}
             return
 
         all_pages = w.list_wiki_pages(ctx)

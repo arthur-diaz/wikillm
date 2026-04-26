@@ -21,54 +21,62 @@ mécanique : résumer, relier, classer, tenir à jour.
 
 ---
 
-## 2. Contraintes du modèle local
+## 2. Contraintes du modèle
 
-Ce wiki tourne sur **Meta-Llama-3.1-8B-Instruct Q4_K_M** via `llama-cpp-python`
-avec CUDA sur une RTX 3070 Ti (8 Go VRAM). Cela impose :
+Ce wiki utilise **le modèle configuré dans `config.yaml`** via `llama-cpp-python`.
+Le modèle actif, ses paramètres de contexte et d'inférence sont lus à l'exécution.
+Contraintes pratiques à respecter quel que soit le modèle :
 
-- **Contexte pratique : 8 192 tokens** par appel (configurable dans `config.yaml`).
-  Le modèle supporte 128k nominalement, mais le KV cache en 4-bit sur 8 Go impose
-  de rester prudent. Tout workflow qui ne tient pas dans 8k doit être découpé.
+- **Contexte pratique : 8 192 tokens** par appel (valeur de `model.n_ctx` dans
+  `config.yaml`). Tout workflow qui ne tient pas dans cette fenêtre doit être découpé.
 - **Pas d'appel API externe.** Aucun accès réseau, aucun fallback cloud.
-- **Prompts concis.** Pas de few-shot géant. Instruction claire, données, point.
-- **Sorties structurées.** Lorsqu'on attend du JSON, exiger explicitement et
+- **Prompts concis.** Instruction claire, données, point. Pas de few-shot géant.
+- **Sorties structurées.** Lorsqu'on attend du JSON, l'exiger explicitement et
   valider côté Python (retry si parse échoue).
-- **Format chat Llama 3.** Le template est embarqué dans le GGUF — `chat_format`
-  est `null` dans `config.yaml`, llama-cpp-python le détecte automatiquement.
+- **Format chat auto-détecté.** `chat_format` est `null` dans `config.yaml` —
+  llama-cpp-python détecte le template depuis le GGUF automatiquement.
 
 ---
 
 ## 3. Arborescence du wiki
 
 ```
-data/RAG/                  ← vault Obsidian
-├── Clippings/             ← sources brutes (Obsidian Web Clipper)
-└── wiki/                  ← wiki maintenu par le LLM
-    ├── index.md           # Catalogue — lu EN PREMIER à chaque query
-    ├── log.md             # Journal append-only — format strict (voir §6)
-    ├── overview.md        # Synthèse globale, 1-2 pages max, régénérée à la demande
-    ├── entities/          # Une page par entité nommée (personne, org, produit, lieu)
-    ├── concepts/          # Une page par idée, thème, mécanisme, débat
-    └── sources/           # Une page de résumé par fichier ingéré
+corpora/<nom>/
+├── raw/               ← sources brutes (fichiers à ingérer)
+└── wiki/              ← wiki maintenu par le LLM
+    ├── index.md       # Catalogue — lu EN PREMIER à chaque query
+    ├── log.md         # Journal append-only — format strict (voir §6)
+    ├── overview.md    # Synthèse globale, 1-2 pages max, régénérée à la demande
+    ├── entities/      # Une page par entité nommée (personne, org, produit, lieu)
+    ├── concepts/      # Une page par idée, thème, mécanisme, débat
+    └── sources/       # Une page de résumé par fichier ingéré
 ```
 
-**Règle de séparation entités/concepts :** une entité est un nom propre ("Vannevar
-Bush", "Obsidian", "RTX 3070 Ti"). Un concept est un nom commun ou une idée
-("retrieval augmented generation", "maintenance burden", "memex"). En cas de doute,
-préférer `concepts/`.
+Le corpus par défaut est `corpora/ia/`. D'autres corpus peuvent coexister dans
+`corpora/` avec des wikis indépendants.
 
 ---
 
 ## 4. Convention de nommage
 
-- **Fichiers :** `kebab-case.md` en minuscules, ASCII autant que possible.
-  Exemples : `vannevar-bush.md`, `retrieval-augmented-generation.md`.
-- **Pas d'accents dans les noms de fichiers** (Windows + Obsidian + git jouent
-  mieux sans). Les titres H1 à l'intérieur peuvent avoir tous les accents voulus.
+- **Fichiers :** `kebab-case.md` en minuscules, ASCII, sans accents.
+  Exemples : `hugging-face.md`, `quantification-de-vecteurs.md`, `nvidia.md`.
+- **Slugs français :** les termes français sont translittérés en ASCII kebab-case.
+  Exemple : `décentralisation` → `decentralisation`.
 - **Pages de sources :** `sources/YYYY-MM-DD-<slug>.md` où le slug est dérivé du
-  titre de la source. Exemple : `sources/2026-04-16-llm-wiki-pattern.md`.
-- **Liens internes :** style Obsidian `[[nom-de-page]]` ou `[[nom-de-page|texte affiché]]`.
+  titre. Exemple : `sources/2026-04-16-llm-wiki-pattern.md`.
+- **Liens internes :** style Obsidian `[[nom-de-page]]` ou `[[nom-de-page|texte]]`.
   Toujours sans l'extension `.md`.
+
+### Règle stricte : entité vs concept
+
+| Type | Définition | Exemples domaine IA/ML |
+|------|-----------|------------------------|
+| **Entité** | Nom propre identifiable : entreprise, personne, produit commercial, lieu | Nvidia, Hugging Face, Google, Meta, Gemma, Qualcomm, Keras, Ollama, Vertex AI |
+| **Concept** | Idée, méthode, technique, phénomène, mécanisme | quantification de vecteurs, inférence, open source, modèle de langage, fine-tuning, décentralisation |
+
+En cas de doute : si c'est un nom propre avec majuscule en anglais, identifiable
+sans contexte → **entité**. Si c'est une idée ou technique générique → **concept**.
 
 ---
 
@@ -98,13 +106,13 @@ related_concepts: [[memex, retrieval-augmented-generation]]
 ```yaml
 ---
 type: entity
-name: "Vannevar Bush"
-slug: vannevar-bush
-kind: person              # person | organization | product | place | work | other
+name: "Hugging Face"
+slug: hugging-face
+kind: organization        # person | organization | product | place | work | other
 aliases: []
-sources: [[2026-04-16-llm-wiki-pattern]]
-last_updated: 2026-04-16
-tags: [history-of-computing]
+sources: [[2026-04-21-hugging-face-refuse-nvidia]]
+last_updated: 2026-04-21
+tags: [ia-ouverte, open-source]
 ---
 ```
 
@@ -113,19 +121,19 @@ tags: [history-of-computing]
 ```yaml
 ---
 type: concept
-name: "Memex"
-slug: memex
-aliases: ["Memory Extender"]
-sources: [[2026-04-16-llm-wiki-pattern]]
-last_updated: 2026-04-16
-tags: [knowledge-management, history]
+name: "Décentralisation"
+slug: decentralisation
+aliases: []
+sources: [[2026-04-21-hugging-face-refuse-nvidia]]
+last_updated: 2026-04-21
+tags: [gouvernance, ia-ouverte]
 ---
 ```
 
 **Règles :**
 - `last_updated` est mis à jour à chaque modification non triviale.
 - `sources` liste toutes les pages de `sources/` qui ont contribué à cette page.
-- `tags` : minuscules, kebab-case, pas d'espaces.
+- `tags` : minuscules, kebab-case, sans accents, pas d'espaces.
 
 ---
 
@@ -140,27 +148,33 @@ tags: [knowledge-management, history]
 Où `<op>` est `ingest`, `query`, `lint`, ou `note`. Cela permet un parsing
 trivial en shell : `grep "^## \[" wiki/log.md | tail -10`.
 
-Exemple :
+Exemple d'entrée ingest :
 
 ```markdown
-## [2026-04-16 15:03] ingest | LLM Wiki idea
+## [2026-04-21 22:06] ingest | Hugging Face refuse NVIDIA
 
-- Source : `raw/llm-wiki-idea.md`
-- Page créée : [[2026-04-16-llm-wiki-pattern]]
-- Entités touchées : [[obsidian]], [[vannevar-bush]] (nouvelle)
-- Concepts touchés : [[memex]] (nouveau), [[retrieval-augmented-generation]]
-- Notes : synthèse intégrée à [[overview]]
+- **Source** : `Pourquoi la startup Hugging Face a refusé 500M$ à NVIDIA.md`
+- **Créé** : [[2026-04-21-hugging-face-refuse-nvidia]]
+- **Entités** : [[mathilde-rochefort]] · [[clement-delangue]] · [[hugging-face]]
+- **Concepts** : [[ia-ouverte]] · [[decentralisation]]
+- **Enrichi** : [[nvidia]] (entité, frontmatter)
+- **Contradictions** : 2
 ```
+
+Règles de format :
+- Listes séparées par ` · ` (pas de virgules).
+- Lignes omises si vides (pas de `_aucun_`, pas de `_aucune_`).
+- Labels en **gras**.
 
 ---
 
 ## 7. Workflow : INGEST
 
-Déclencheur : `python scripts/wiki.py ingest data/RAG/Clippings/<fichier.md>`
+Déclencheur : `python scripts/wiki.py ingest corpora/<nom>/raw/<fichier.md>`
 
 Étapes **dans cet ordre** :
 
-1. **Lire** le fichier source complet. Si >6000 tokens, le découper et résumer
+1. **Lire** le fichier source complet. Si >6000 tokens, découper et résumer
    par passes successives avant de synthétiser.
 2. **Lire `wiki/index.md`** pour savoir ce qui existe déjà.
 3. **Extraire** en un seul appel LLM, avec sortie JSON stricte :
@@ -169,27 +183,29 @@ Déclencheur : `python scripts/wiki.py ingest data/RAG/Clippings/<fichier.md>`
      "title": "...",
      "summary_one_line": "...",
      "key_points": ["...", "..."],
-     "entities": [{"name": "...", "kind": "person|org|...", "new": true|false}],
-     "concepts": [{"name": "...", "new": true|false}],
-     "contradictions": ["description d'une contradiction avec le wiki existant, ou []"],
+     "entities": [{"name": "...", "kind": "person|org|...", "new": true|false, "note": "..."}],
+     "concepts": [{"name": "...", "new": true|false, "note": "..."}],
+     "contradictions": ["description ou []"],
      "suggested_tags": ["..."]
    }
    ```
+   Appliquer la règle entité/concept du §4 lors de l'extraction.
 4. **Créer** la page dans `sources/YYYY-MM-DD-<slug>.md` avec frontmatter +
    résumé structuré (titre, points clés, citations courtes, liens).
-5. **Pour chaque entité/concept nouveau** : créer la page stub correspondante
-   avec frontmatter + 2-5 phrases issues de la source.
+5. **Pour chaque entité/concept nouveau** : créer la page stub avec frontmatter +
+   2-5 phrases issues de la source. **Pages rédigées en français**, slugs en ASCII.
 6. **Pour chaque entité/concept existant** : lire la page, décider si un ajout
-   est justifié, puis éditer en préservant l'existant (ajout incrémental, pas
-   réécriture destructrice). Mettre à jour `last_updated` et `sources`.
-7. **Mettre à jour `index.md`** : ajouter une ligne sous la section correspondante.
-8. **Appender une entrée** dans `log.md` au format §6.
-9. **Rapporter** à l'utilisateur : ce qui a été créé, modifié, et les
-   contradictions éventuelles détectées à l'étape 3.
+   est justifié, puis éditer en préservant l'existant (ajout incrémental).
+   Mettre à jour `last_updated` et `sources`.
+7. **Mettre à jour `index.md`** : ajouter une ligne sous la section correspondante,
+   au format enrichi `- [[slug]] — description _(type · tags · date)_`.
+8. **Mettre à jour la section `## Vue d'ensemble`** de `index.md` (2-3 phrases
+   sur le périmètre du corpus, générées par LLM).
+9. **Appender une entrée** dans `log.md` au format §6.
+10. **Rapporter** à l'utilisateur : créations, enrichissements, contradictions.
 
 **Sécurité des écritures :** avant de réécrire une page existante, la lire
-intégralement. Ne jamais tronquer une page sans confirmation explicite de
-l'utilisateur si la nouvelle version retire du contenu.
+intégralement. Ne jamais tronquer une page sans confirmation explicite.
 
 ---
 
@@ -198,70 +214,54 @@ l'utilisateur si la nouvelle version retire du contenu.
 Déclencheur : `python scripts/wiki.py query "<question>"`
 
 1. **Lire `wiki/index.md`** intégralement (il doit rester compact).
-2. **Sélectionner** via un appel LLM les 3 à 8 pages les plus pertinentes pour
-   la question. Sortie JSON : `{"pages": ["path1", "path2", ...], "reasoning": "..."}`.
+2. **Sélectionner** via un appel LLM les 3 à 8 pages les plus pertinentes.
+   Sortie JSON : `{"pages": ["slug1", "slug2"], "reasoning": "..."}`.
 3. **Lire** ces pages.
-4. **Synthétiser** une réponse en markdown, avec citations sous forme de liens
-   `[[page]]` vers les pages utilisées.
-5. **Proposer** à la fin : "Souhaites-tu filer cette réponse dans le wiki comme
-   nouvelle page ?" (voir §10 — file-back).
-6. Si la réponse est filée, appender une entrée `query` dans `log.md`.
+4. **Synthétiser** une réponse en markdown, avec citations `[[page]]`.
+5. **Proposer** à la fin : file-back si la réponse a de la valeur durable.
+6. Appender une entrée `query` dans `log.md`.
 
-Si aucune page n'est pertinente, le dire explicitement et suggérer des sources
-à ingérer.
+Si aucune page n'est pertinente, le dire et suggérer des sources à ingérer.
 
 ---
 
-## 9. Workflow : LINT (version v1 minimale)
+## 9. Workflow : LINT
 
-Déclencheur : `python scripts/wiki.py lint`
+Déclencheur : `python scripts/wiki.py lint [--fix-index] [--auto-fix]`
 
-Version initiale — détection mécanique, pas d'analyse sémantique profonde :
+1. **Pages orphelines** : pages sans lien entrant (hors `index.md`).
+2. **Liens cassés** : `[[...]]` pointant vers des pages inexistantes.
+3. **Frontmatter invalide** : pages sans bloc YAML ou champs obligatoires manquants.
+4. **Index désynchronisé** : pages dans `wiki/` absentes de `index.md`, et inversement.
+5. **Incohérences de dates** : `last_updated` antérieur au dernier ingest touchant la page.
 
-1. **Pages orphelines** : parcourir toutes les pages et lister celles qui n'ont
-   aucun lien entrant (hors `index.md`).
-2. **Liens cassés** : repérer les `[[...]]` pointant vers des pages inexistantes.
-3. **Frontmatter invalide** : pages sans bloc YAML ou avec champs obligatoires
-   manquants selon §5.
-4. **Index désynchronisé** : pages existantes dans `wiki/` mais absentes de
-   `index.md`, et inversement.
-5. **Incohérences de dates** : `last_updated` antérieur au dernier `ingest`
-   touchant cette page (d'après `log.md`).
+Avec `--fix-index` : ajoute les pages manquantes dans l'index, en extrayant leur
+description depuis le frontmatter ou le contenu (jamais "(ajouté par lint)").
 
-Sortie : un rapport markdown affiché dans le terminal. Pas de correction
-automatique à cette étape — c'est l'utilisateur qui décide.
-
-Les versions futures ajouteront : détection de contradictions inter-pages,
-concepts mentionnés sans page dédiée, suggestions de nouvelles questions.
+Sortie : rapport markdown dans le terminal. Entrée log déclenchée une seule fois
+même si plusieurs passes sont effectuées (déduplication 60 s).
 
 ---
 
 ## 10. File-back : transformer une query en page
 
-Lorsqu'une réponse à une query a de la valeur au-delà de l'instant, elle doit
-pouvoir devenir une page du wiki. Deux destinations possibles :
+Lorsqu'une réponse a de la valeur durable, la filer dans le wiki.
+Deux destinations : `concepts/` ou `analyses/` (à créer si besoin).
 
-- **`concepts/`** si la réponse éclaire une idée transverse.
-- **Une page dédiée `analyses/`** (à créer si le besoin apparaît) pour des
-  comparaisons, tables, ou synthèses spécifiques.
-
-La page file-back doit référencer dans son frontmatter la question qui l'a
-produite : `origin_query: "..."` et `origin_date: YYYY-MM-DD`.
+La page file-back référence dans son frontmatter : `origin_query: "..."` et
+`origin_date: YYYY-MM-DD`.
 
 ---
 
 ## 11. Règles d'écriture des pages
 
 - **Titre H1** identique au champ `name` ou `title` du frontmatter.
-- **Première section = résumé en 3-5 phrases.** Ce résumé est ce qui apparaît
-  dans l'index, donc il doit être auto-porteur.
-- **Sections suivantes** structurées selon le type de page (§5).
-- **Citations des sources** : courtes (<15 mots) et entre guillemets, avec un
-  lien vers la page `sources/` correspondante. Jamais de paraphrases masquées
-  en citations.
-- **Style sobre.** Pas de superlatifs inutiles. Le wiki n'est pas un essai.
-- **Incertitudes explicites.** Si une source affirme X et une autre non-X, le
-  dire et lier les deux.
+- **Première section = résumé en 3-5 phrases.** Auto-porteur, c'est ce qui
+  apparaît dans l'index.
+- **Citations des sources** : courtes (<15 mots), entre guillemets, avec lien
+  vers la page `sources/`. Jamais de paraphrases masquées.
+- **Style sobre.** Pas de superlatifs. Le wiki n'est pas un essai.
+- **Incertitudes explicites.** Si X et non-X coexistent, les deux sont liés.
 
 ---
 
@@ -272,15 +272,29 @@ produite : `origin_query: "..."` et `origin_date: YYYY-MM-DD`.
 - Inventer des sources, des citations, ou des dates.
 - Fusionner deux pages sans accord de l'utilisateur.
 - Laisser une page sans frontmatter valide.
+- Laisser une entrée d'index sans description.
 - Écrire des résumés plus longs que l'original d'une source.
-- Utiliser des embeddings ou une base vectorielle à ce stade — le pattern
-  s'appuie sur `index.md` comme catalogue lisible.
+- Utiliser des embeddings ou une base vectorielle — le pattern s'appuie sur
+  `index.md` comme catalogue lisible.
 
 ---
 
 ## 13. Évolution de ce schéma
 
-Ce document n'est pas figé. À mesure que le wiki grandit, certaines conventions
-s'avéreront inadaptées. Quand l'utilisateur ou toi identifiez un frottement
-récurrent, proposer une modification du schéma et la discuter avant de
-l'appliquer rétroactivement aux pages existantes.
+Ce document n'est pas figé. Quand l'utilisateur ou toi identifiez un frottement
+récurrent, proposer une modification du schéma et la discuter avant de l'appliquer
+rétroactivement aux pages existantes.
+
+---
+
+## 14. Langue
+
+- **Toutes les pages sont rédigées en français**, y compris les stubs et résumés
+  générés automatiquement.
+- **Les slugs restent en ASCII kebab-case**, même pour les termes français :
+  `décentralisation` → `decentralisation`, `modèle de langage` → `modele-de-langage`.
+- **Les tags** sont en kebab-case français sans accents :
+  `ia-ouverte`, `open-source`, `modele-de-langage`.
+- **Les titres H1** peuvent contenir tous les accents et caractères unicode voulus.
+- Les noms propres anglais ou étrangers (Hugging Face, Nvidia…) sont conservés
+  tels quels dans les titres, mais leurs slugs sont translittérés.

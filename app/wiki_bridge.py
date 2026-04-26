@@ -21,8 +21,13 @@ _llm_lock = asyncio.Lock()
 
 
 async def reload_model_async() -> None:
-    """Recharge le modèle LLM (bloque les requêtes pendant le rechargement)."""
+    """Recharge le modèle LLM (bloque les requêtes pendant le rechargement).
+    En mode API, marque immédiatement comme prêt sans charger de fichier GGUF."""
     from app import state
+    provider_cfg = w.CFG.get("llm_provider", {})
+    if provider_cfg.get("mode") == "api":
+        state.set_model_status(state.ModelStatus.loaded)
+        return
     async with _llm_lock:
         try:
             loop = asyncio.get_event_loop()
@@ -43,21 +48,8 @@ async def run_blocking(fn, *args, **kwargs):
 # ---------------------------------------------------------------------------
 
 def _llm_stream_sync(system: str, user: str):
-    llm = w._get_llm()
-    inf = w.CFG["inference"]
-    for chunk in llm.create_chat_completion(
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=inf["temperature"],
-        top_p=inf["top_p"],
-        max_tokens=inf["max_tokens"],
-        stream=True,
-    ):
-        delta = chunk["choices"][0]["delta"].get("content", "")
-        if delta:
-            yield delta
+    """Générateur bloquant de tokens. Délègue au backend actif."""
+    yield from w.get_active_backend().chat_stream(system, user)
 
 
 async def llm_stream(system: str, user: str) -> AsyncGenerator[str, None]:
@@ -91,10 +83,13 @@ async def ingest_stream(source_path: Path) -> AsyncGenerator[dict, None]:
     today = datetime.now().strftime("%Y-%m-%d")
 
     yield {"step": "reading", "msg": f"Lecture de {source_path.name}"}
-    raw_text = source_path.read_text(encoding="utf-8", errors="replace")
-
-    source_content = await run_blocking(w.summarize_long_source, raw_text)
-    index = w.read_index(ctx) or "(index vide)"
+    try:
+        raw_text = source_path.read_text(encoding="utf-8", errors="replace")
+        source_content = await run_blocking(w.summarize_long_source, raw_text)
+        index = w.read_index(ctx) or "(index vide)"
+    except Exception as e:
+        yield {"step": "error", "msg": str(e)}
+        return
 
     yield {"step": "extracting", "msg": "Extraction structurée via LLM…"}
     try:
@@ -127,30 +122,43 @@ async def ingest_stream(source_path: Path) -> AsyncGenerator[dict, None]:
     entities_links = [f"[[{w.slugify(e.get('slug') or e['name'])}]]" for e in data.get("entities", [])]
     concepts_links = [f"[[{w.slugify(c.get('slug') or c['name'])}]]" for c in data.get("concepts", [])]
 
+    valid_kinds = {"article", "paper", "podcast-notes", "book-chapter", "transcript", "other"}
+    source_kind = data.get("source_kind", "article")
+    if source_kind not in valid_kinds:
+        source_kind = "article"
+
     source_meta = {
         "type": "source",
         "title": data.get("title", "Sans titre"),
         "slug": slug,
         "ingested": today,
         "source_path": source_path.name,
-        "source_kind": "article",
+        "source_kind": source_kind,
         "tags": data.get("tags", []),
         "related_entities": entities_links,
         "related_concepts": concepts_links,
     }
     key_points_md = "\n".join(f"- {kp}" for kp in data.get("key_points", []))
     contradictions = data.get("contradictions") or []
-    contradictions_md = ""
-    if contradictions:
-        contradictions_md = "\n\n## Contradictions\n\n" + "\n".join(f"- {c}" for c in contradictions)
+    contradictions_md = (
+        "\n\n## Contradictions\n\n" + "\n".join(f"- {c}" for c in contradictions)
+    ) if contradictions else ""
+
+    # Sections omises si vides (pas de placeholder _aucune_ / _aucun_)
+    entities_section = (
+        f"\n\n## Entités\n\n{', '.join(entities_links)}" if entities_links else ""
+    )
+    concepts_section = (
+        f"\n\n## Concepts\n\n{', '.join(concepts_links)}" if concepts_links else ""
+    )
 
     source_content_md = (
         f"# {data.get('title', 'Sans titre')}\n\n"
         f"{data.get('summary_one_line', '')}\n\n"
         f"## Points clés\n\n{key_points_md}"
-        f"{contradictions_md}\n\n"
-        f"## Entités\n\n{', '.join(entities_links) or '_aucune_'}\n\n"
-        f"## Concepts\n\n{', '.join(concepts_links) or '_aucun_'}\n"
+        f"{contradictions_md}"
+        f"{entities_section}"
+        f"{concepts_section}\n"
     )
     w.WikiPage(source_page_path, source_meta, source_content_md).save()
 
@@ -188,24 +196,47 @@ async def ingest_stream(source_path: Path) -> AsyncGenerator[dict, None]:
             async with _llm_lock:
                 await run_blocking(w._enrich_existing_page, cpt_path, source_page_slug, cpt.get("note", ""), today, updated_stubs, "concept")
 
-    w._update_index_entry("Sources", f"- [[{source_page_slug}]] — {data.get('summary_one_line', '')} _(ingéré {today})_", ctx)
+    src_tags_str = " · ".join(data.get("tags", [])[:3])
+    src_meta_str = "source" + (f" · {src_tags_str}" if src_tags_str else "") + f" · ingéré {today}"
+    w._update_index_entry("Sources", f"- [[{source_page_slug}]] — {data.get('summary_one_line', '')} _({src_meta_str})_", ctx)
+    ent_tags_str = " · ".join(data.get("tags", [])[:2])
     for ent in data.get("entities", []):
         if ent.get("new"):
             es = w.slugify(ent.get("slug") or ent["name"])
-            w._update_index_entry("Entités", f"- [[{es}]] — {(ent.get('note', '') or ent['name']).splitlines()[0]}", ctx)
+            note_line = (ent.get("note", "") or ent["name"]).splitlines()[0]
+            kind = ent.get("kind", "other")
+            em = f"entité · {kind}" + (f" · {ent_tags_str}" if ent_tags_str else "")
+            w._update_index_entry("Entités", f"- [[{es}]] — {note_line} _({em})_", ctx)
+    cpt_tags_str = " · ".join(data.get("tags", [])[:2])
     for cpt in data.get("concepts", []):
         if cpt.get("new"):
             cs = w.slugify(cpt.get("slug") or cpt["name"])
-            w._update_index_entry("Concepts", f"- [[{cs}]] — {(cpt.get('note', '') or cpt['name']).splitlines()[0]}", ctx)
+            note_line = (cpt.get("note", "") or cpt["name"]).splitlines()[0]
+            cm = "concept" + (f" · {cpt_tags_str}" if cpt_tags_str else "")
+            w._update_index_entry("Concepts", f"- [[{cs}]] — {note_line} _({cm})_", ctx)
 
-    w.append_log("ingest", data.get("title", slug),
-        f"- Source : `{source_path.name}`\n"
-        f"- Page créée : [[{source_page_slug}]]\n"
-        f"- Stubs créés : {', '.join(created_stubs) or '_aucun_'}\n"
-        f"- Pages enrichies : {', '.join(updated_stubs) or '_aucune_'}\n"
-        f"- Contradictions : {len(contradictions)}\n",
-        ctx,
-    )
+    # Mise à jour de la section Vue d'ensemble de l'index (SCHEMA §7 étape 8)
+    try:
+        async with _llm_lock:
+            await run_blocking(w._update_index_overview, ctx)
+    except Exception:
+        pass  # Non bloquant : l'ingest réussit même si cette étape échoue
+
+    log_parts = [
+        f"- **Source** : `{source_path.name}`",
+        f"- **Créé** : [[{source_page_slug}]]",
+    ]
+    new_ents = [s for s in created_stubs if "(entité)" in s]
+    new_cpts = [s for s in created_stubs if "(concept)" in s]
+    if new_ents:
+        log_parts.append("- **Entités** : " + " · ".join(new_ents))
+    if new_cpts:
+        log_parts.append("- **Concepts** : " + " · ".join(new_cpts))
+    if updated_stubs:
+        log_parts.append("- **Enrichi** : " + " · ".join(updated_stubs))
+    if contradictions:
+        log_parts.append(f"- **Contradictions** : {len(contradictions)}")
+    w.append_log("ingest", data.get("title", slug), "\n".join(log_parts) + "\n", ctx)
 
     yield {
         "step": "done",

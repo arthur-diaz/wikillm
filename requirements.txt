@@ -12,3 +12,8 @@ llama-cpp-python>=0.3.0
 pyyaml>=6.0
 click>=8.1
 python-frontmatter>=1.1
+
+# Fournisseurs LLM externes (optionnels — installer seulement si nécessaire)
+# pip install openai>=1.0
+# pip install anthropic>=0.20
+# pip install mistralai>=0.4

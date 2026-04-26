@@ -55,7 +55,7 @@ export default function GraphPanel({ onOpenPage }: Props) {
   /* UI state (only what needs React re-render) */
   const [panelOpen, setPanelOpen] = useState(true);
   const [sections, setSections] = useState({
-    filters: true, groups: false, display: true, forces: false,
+    filters: false, groups: false, display: false, forces: false,
   });
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({
@@ -66,7 +66,7 @@ export default function GraphPanel({ onOpenPage }: Props) {
     arrows: false, fadeThreshold: 0.45, nodeScale: 1, linkScale: 1, animate: false,
   });
   const [forces, setForces] = useState({
-    center: 0.003, repulsion: 10, linkStrength: 0.04, linkDistance: 100,
+    center: 0.003, repulsion: 20, linkStrength: 0.04, linkDistance: 100,
   });
   const [accent, setAccent] = useState("#8b5cf6");
   const [groupVisible, setGroupVisible] = useState({ source: true, entity: true, concept: true });
@@ -224,26 +224,24 @@ export default function GraphPanel({ onOpenPage }: Props) {
       hiSet = new Set(s.nodes.filter(n => n.label.toLowerCase().includes(q)).map(n => n.id));
     }
 
-    /* Links */
+    /* Links — straight lines (Obsidian-style) */
     ctx.lineWidth = s.display.linkScale / scale;
     for (const l of s.links) {
       const active = !hiSet || (hiSet.has(l.source.id) && hiSet.has(l.target.id));
-      ctx.strokeStyle = active ? "rgba(139,148,158,0.65)" : "rgba(139,148,158,0.08)";
-      const mx = (l.source.x + l.target.x) / 2 + (l.target.y - l.source.y) * 0.08;
-      const my = (l.source.y + l.target.y) / 2 - (l.target.x - l.source.x) * 0.08;
+      ctx.strokeStyle = active ? "rgba(139,148,158,0.55)" : "rgba(139,148,158,0.07)";
       ctx.beginPath();
       ctx.moveTo(l.source.x, l.source.y);
-      ctx.quadraticCurveTo(mx, my, l.target.x, l.target.y);
+      ctx.lineTo(l.target.x, l.target.y);
       ctx.stroke();
 
       if (s.display.arrows && active) {
         const size = 4 / scale;
         ctx.fillStyle = ctx.strokeStyle as string;
+        const dx = l.target.x - l.source.x, dy = l.target.y - l.source.y;
+        const d = Math.hypot(dx, dy) + 0.01;
+        const ux = dx / d, uy = dy / d;
         // Arrow at target
         {
-          const dx = l.target.x - mx, dy = l.target.y - my;
-          const d = Math.hypot(dx, dy) + 0.01;
-          const ux = dx / d, uy = dy / d;
           const r = nodeRadius(l.target) + 1.5;
           const ax = l.target.x - ux * r, ay = l.target.y - uy * r;
           ctx.beginPath();
@@ -253,25 +251,25 @@ export default function GraphPanel({ onOpenPage }: Props) {
           ctx.closePath();
           ctx.fill();
         }
-        // Arrow at source too if bidirectional
         if (l.bidirectional) {
-          const dx = l.source.x - mx, dy = l.source.y - my;
-          const d = Math.hypot(dx, dy) + 0.01;
-          const ux = dx / d, uy = dy / d;
           const r = nodeRadius(l.source) + 1.5;
-          const ax = l.source.x - ux * r, ay = l.source.y - uy * r;
+          const ax = l.source.x + ux * r, ay = l.source.y + uy * r;
           ctx.beginPath();
           ctx.moveTo(ax, ay);
-          ctx.lineTo(ax - ux * size * 2 - uy * size, ay - uy * size * 2 + ux * size);
-          ctx.lineTo(ax - ux * size * 2 + uy * size, ay - uy * size * 2 - ux * size);
+          ctx.lineTo(ax + ux * size * 2 - uy * size, ay + uy * size * 2 + ux * size);
+          ctx.lineTo(ax + ux * size * 2 + uy * size, ay + uy * size * 2 - ux * size);
           ctx.closePath();
           ctx.fill();
         }
       }
     }
 
-    /* Nodes */
-    const showLabels = scale > s.display.fadeThreshold;
+    /* Nodes + progressive label fade (Obsidian-style) */
+    // Smooth fade ramp: 0 below threshold, 1 once threshold + fadeRange is reached.
+    const threshold = s.display.fadeThreshold;
+    const fadeRange = 0.35;  // wider ramp so fade is gradual, not snappy
+    const labelOpacity = Math.max(0, Math.min(1, (scale - threshold) / fadeRange));
+
     for (const n of s.nodes) {
       const active = !hiSet || hiSet.has(n.id);
       const r = nodeRadius(n);
@@ -291,9 +289,8 @@ export default function GraphPanel({ onOpenPage }: Props) {
       ctx.strokeStyle = "rgba(0,0,0,0.25)";
       ctx.stroke();
 
-      if (showLabels) {
-        const labelFade = Math.min(1, (scale - s.display.fadeThreshold) / 0.3);
-        ctx.globalAlpha = (active ? 1 : 0.2) * labelFade;
+      if (labelOpacity > 0.01) {
+        ctx.globalAlpha = (active ? 1 : 0.2) * labelOpacity;
         ctx.fillStyle = "#c9d1d9";
         ctx.font = `${10 / scale}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textBaseline = "middle";
@@ -525,7 +522,7 @@ export default function GraphPanel({ onOpenPage }: Props) {
   );
 
   return (
-    <div ref={wrapRef} className="relative w-full h-full overflow-hidden" style={{ background: "#0d1117" }}>
+    <div ref={wrapRef} className="relative w-full h-full overflow-hidden" style={{ background: "#0a0a0b" }}>
       <style>{`
         .graph-range::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #fff; cursor: pointer; border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
         .graph-range::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; cursor: pointer; border: 0; }
@@ -557,7 +554,7 @@ export default function GraphPanel({ onOpenPage }: Props) {
 
       {/* Hover tooltip */}
       {hoverInfo && (
-        <div className="absolute top-11 left-3 z-10 rounded-lg border border-[#2a313c] px-3 py-2 text-xs pointer-events-none max-w-[280px]" style={{ background: "#161b22", boxShadow: "0 10px 30px rgba(0,0,0,.45)" }}>
+        <div className="absolute top-11 left-3 z-10 rounded-lg border border-[#2a313c] px-3 py-2 text-xs pointer-events-none max-w-[280px]" style={{ background: "#0a0a0b", boxShadow: "0 10px 30px rgba(0,0,0,.45)" }}>
           <div className="font-semibold text-gray-100 flex items-center gap-1.5">
             <span className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS[hoverInfo.type] }} />
             {hoverInfo.label}
@@ -571,18 +568,18 @@ export default function GraphPanel({ onOpenPage }: Props) {
 
       {/* Help line — bottom-left */}
       <div className="absolute bottom-3 left-3 z-10 flex gap-3 items-center text-[11px] text-gray-500">
-        <span><kbd className="px-1.5 py-[1px] rounded border border-[#2a313c] bg-[#161b22] font-mono text-[10px] text-gray-400">scroll</kbd> zoomer</span>
-        <span><kbd className="px-1.5 py-[1px] rounded border border-[#2a313c] bg-[#161b22] font-mono text-[10px] text-gray-400">drag</kbd> déplacer</span>
-        <span><kbd className="px-1.5 py-[1px] rounded border border-[#2a313c] bg-[#161b22] font-mono text-[10px] text-gray-400">dbl-clic</kbd> recentrer</span>
+        <span><kbd className="px-1.5 py-[1px] rounded border border-[#2a313c] bg-[#0a0a0b] font-mono text-[10px] text-gray-400">scroll</kbd> zoomer</span>
+        <span><kbd className="px-1.5 py-[1px] rounded border border-[#2a313c] bg-[#0a0a0b] font-mono text-[10px] text-gray-400">drag</kbd> déplacer</span>
+        <span><kbd className="px-1.5 py-[1px] rounded border border-[#2a313c] bg-[#0a0a0b] font-mono text-[10px] text-gray-400">dbl-clic</kbd> recentrer</span>
       </div>
 
       {/* Toolbar (when panel hidden) */}
       {!panelOpen && (
         <div className="absolute top-3 right-3 z-10 flex gap-1.5">
-          <button onClick={fitToView} title="Recentrer" className="w-[30px] h-[30px] grid place-items-center rounded-md border border-[#2a313c] bg-[#161b22] text-gray-400 hover:text-gray-100 hover:border-[#3a424f]">
+          <button onClick={fitToView} title="Recentrer" className="w-[30px] h-[30px] grid place-items-center rounded-md border border-[#2a313c] bg-[#0a0a0b] text-gray-400 hover:text-gray-100 hover:border-[#3a424f]">
             <Crosshair size={14} />
           </button>
-          <button onClick={() => setPanelOpen(true)} title="Afficher le panneau" className="w-[30px] h-[30px] grid place-items-center rounded-md border border-[#2a313c] bg-[#161b22] text-gray-400 hover:text-gray-100 hover:border-[#3a424f]">
+          <button onClick={() => setPanelOpen(true)} title="Afficher le panneau" className="w-[30px] h-[30px] grid place-items-center rounded-md border border-[#2a313c] bg-[#0a0a0b] text-gray-400 hover:text-gray-100 hover:border-[#3a424f]">
             <Menu size={14} />
           </button>
         </div>
@@ -593,14 +590,14 @@ export default function GraphPanel({ onOpenPage }: Props) {
         <aside
           className="absolute top-3 right-3 w-[290px] rounded-xl border border-[#2a313c] overflow-y-auto z-20"
           style={{
-            background: "#161b22",
+            background: "#0a0a0b",
             maxHeight: "calc(100% - 24px)",
             boxShadow: "0 10px 30px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3)",
           }}
         >
-          <div className="sticky top-0 z-[2] flex items-center gap-1.5 px-3 py-2.5 border-b border-[#2a313c]" style={{ background: "#161b22" }}>
+          <div className="sticky top-0 z-[2] flex items-center gap-1.5 px-3 py-2.5 border-b border-[#2a313c]" style={{ background: "#0a0a0b" }}>
             <ChevronRight size={10} className="text-gray-500 rotate-90" />
-            <h2 className="flex-1 text-[13px] font-semibold">Filtres</h2>
+            <h2 className="flex-1 text-[13px] font-semibold">Graphe</h2>
             <button onClick={resetFilters} title="Réinitialiser" className="p-1 rounded text-gray-500 hover:text-gray-200 hover:bg-[#1c2129]">
               <RotateCcw size={12} />
             </button>
@@ -611,7 +608,7 @@ export default function GraphPanel({ onOpenPage }: Props) {
 
           {/* Search */}
           <div className="px-3 pt-3">
-            <div className="flex items-center gap-2 bg-[#0d1117] border border-[#2a313c] rounded-md px-2.5 py-1.5">
+            <div className="flex items-center gap-2 bg-[#0a0a0b] border border-[#2a313c] rounded-md px-2.5 py-1.5">
               <Search size={13} className="text-gray-500 shrink-0" />
               <input
                 value={query}
@@ -692,7 +689,7 @@ export default function GraphPanel({ onOpenPage }: Props) {
           {/* Forces */}
           <Section id="forces" title="Forces">
             <Slider label="Force de centre" value={forces.center} min={0} max={0.02} step={0.001} onChange={v => setForces(f => ({ ...f, center: v }))} format={v => v.toFixed(3)} />
-            <Slider label="Répulsion" value={forces.repulsion} min={0} max={20} step={0.01} onChange={v => setForces(f => ({ ...f, repulsion: v }))} format={v => Math.round(v).toString()} />
+            <Slider label="Répulsion" value={forces.repulsion} min={20} max={800} step={10} onChange={v => setForces(f => ({ ...f, repulsion: v }))} format={v => Math.round(v).toString()} />
             <Slider label="Force des liens" value={forces.linkStrength} min={0} max={0.2} step={0.005} onChange={v => setForces(f => ({ ...f, linkStrength: v }))} format={v => v.toFixed(3)} />
             <Slider label="Distance des liens" value={forces.linkDistance} min={30} max={300} step={5} onChange={v => setForces(f => ({ ...f, linkDistance: v }))} format={v => Math.round(v).toString()} />
           </Section>

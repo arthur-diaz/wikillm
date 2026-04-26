@@ -37,7 +37,13 @@ async def list_pages(type: str | None = None, tag: str | None = None):
             "sources_count": len(meta.get("sources", [])),
         })
     result.sort(key=lambda x: (x["type"], x["name"].lower()))
-    return result
+    seen: set[str] = set()
+    deduped = []
+    for item in result:
+        if item["slug"] not in seen:
+            seen.add(item["slug"])
+            deduped.append(item)
+    return deduped
 
 
 @router.get("/pages/{slug}")

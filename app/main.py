@@ -2,10 +2,27 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from contextlib import asynccontextmanager
+
+# Force UTF-8 on stdout/stderr — Windows defaults to cp1252 or ascii in
+# non-interactive mode, which breaks click.echo() calls with accented chars.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+import logging
+
 from pathlib import Path
 
 from fastapi import FastAPI
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler()],
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -23,16 +40,21 @@ async def lifespan(app: FastAPI):
     if active in ws.get("corpora", {}):
         state.set_ctx(state.ctx_from_entry(ws["corpora"][active]))
 
-    print("[startup] chargement du modèle LLM…")
-    state.set_model_status(state.ModelStatus.loading)
-    loop = asyncio.get_event_loop()
-    try:
-        await loop.run_in_executor(None, w._get_llm)
+    provider_cfg = w.CFG.get("llm_provider", {})
+    if provider_cfg.get("mode") == "api":
+        print(f"[startup] mode API ({provider_cfg.get('api_provider', '?')}) — pas de chargement GGUF.")
         state.set_model_status(state.ModelStatus.loaded)
-        print("[startup] modèle prêt.")
-    except Exception as e:
-        state.set_model_status(state.ModelStatus.error, str(e))
-        print(f"[startup] erreur modèle : {e}")
+    else:
+        print("[startup] chargement du modèle LLM…")
+        state.set_model_status(state.ModelStatus.loading)
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, w._get_llm)
+            state.set_model_status(state.ModelStatus.loaded)
+            print("[startup] modèle prêt.")
+        except Exception as e:
+            state.set_model_status(state.ModelStatus.error, str(e))
+            print(f"[startup] erreur modèle : {e}")
     yield
 
 

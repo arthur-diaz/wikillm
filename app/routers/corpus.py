@@ -1,6 +1,7 @@
 """Gestion des corpus (multi-corpus)."""
 from __future__ import annotations
 
+import shutil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -140,6 +141,9 @@ async def delete_corpus(name: str):
         raise HTTPException(400, "Le corpus par défaut ne peut pas être supprimé")
     if ws["active"] == name:
         raise HTTPException(400, "Impossible de supprimer le corpus actif — active un autre corpus d'abord")
+    corpus_path = w.PROJECT_ROOT / ws["corpora"][name]["path"]
     del ws["corpora"][name]
     state.save_workspaces(ws)
+    if corpus_path.exists():
+        shutil.rmtree(corpus_path)
     return {"ok": True}

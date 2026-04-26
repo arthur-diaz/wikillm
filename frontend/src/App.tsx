@@ -2,17 +2,19 @@ import { useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatPanel from "./components/ChatPanel";
 import LibraryPanel from "./components/LibraryPanel";
+import GraphPanel from "./components/GraphPanel";
 import IngestPanel from "./components/IngestPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import { CorpusContext, type Corpus } from "./CorpusContext";
 
-export type Panel = "chat" | "library" | "ingest" | "settings";
+export type Panel = "chat" | "library" | "graph" | "ingest" | "settings";
 
 export default function App() {
   const [active, setActive] = useState<Panel>("chat");
   const [corpusList, setCorpusList] = useState<Corpus[]>([]);
   const [activeCorpus, setActiveCorpus] = useState<string>("");
   const [corpusKey, setCorpusKey] = useState(0);
+  const [graphNavPage, setGraphNavPage] = useState<string | undefined>();
 
   const refreshCorpus = async () => {
     const data = await fetch("/api/corpus").then(r => r.json());
@@ -38,7 +40,8 @@ export default function App() {
         <Sidebar active={active} onChange={setActive} activeCorpus={activeCorpus} corpusList={corpusList} onSwitchCorpus={switchCorpus} />
         <main className="flex-1 overflow-hidden">
           {active === "chat"     && <ChatPanel key={corpusKey} />}
-          {active === "library"  && <LibraryPanel key={corpusKey} />}
+          {active === "library"  && <LibraryPanel key={corpusKey} initialPage={graphNavPage} />}
+          {active === "graph"    && <GraphPanel key={corpusKey} onOpenPage={slug => { setGraphNavPage(slug); setActive("library"); }} />}
           {active === "ingest"   && <IngestPanel key={corpusKey} />}
           {active === "settings" && <SettingsPanel key={corpusKey} onCorpusChange={() => { refreshCorpus(); setCorpusKey(k => k + 1); }} />}
         </main>
